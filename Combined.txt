@@ -1,0 +1,263 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2513
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fmodern\fcharset0 Courier;\f1\fnil\fcharset134 PingFangSC-Regular;}
+{\colortbl;\red255\green255\blue255;\red0\green0\blue0;}
+{\*\expandedcolortbl;;\cssrgb\c0\c0\c0;}
+\margl1440\margr1440\vieww24020\viewh17980\viewkind0
+\deftab720
+\pard\pardeftab720\partightenfactor0
+
+\f0\fs24 \cf2 \expnd0\expndtw0\kerning0
+\outl0\strokewidth0 \strokec2 #include <stdio.h>\
+#include <stdint.h>\
+#include <unistd.h>\
+#include <string.h>\
+#include <getopt.h>\
+#include <stdlib.h>\
+#include "rc522.h"\
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \outl0\strokewidth0 //from motion detector\
+#include <wiringPi.h>\
+#include <softPwm.h>\
+#include <stdio.h>\
+\
+#define uchar unsigned char\outl0\strokewidth0 \
+\outl0\strokewidth0 //From motion detector\
+#define pirPin    0     //the pir connect to GPIO0\
+#define redPin    1\
+#define greenPin  2\
+#define bluePin   3\
+\pard\pardeftab720\partightenfactor0
+\cf2 \outl0\strokewidth0 \
+\
+unsigned char SN[4]; //card number\
+void print_info(unsigned char *p,int cnt);\
+int read_card();\
+int card_passworld(uint8_t auth_mode,uint8_t addr,uint8_t *Src_Key,uint8_t *New_Key,uint8_t *pSnr);\
+uint8_t write_card_data(uint8_t *data);\
+uint8_t read_card_data();\
+void MFRC522_HAL_Delay(unsigned int ms);\
+\
+//From Motion Detector\
+\pard\pardeftab720\partightenfactor0
+\cf2 \outl0\strokewidth0 void ledInit(void)\{\
+    softPwmCreate(redPin,  0, 100);\
+    softPwmCreate(greenPin,0, 100);\
+    softPwmCreate(bluePin, 0, 100);\
+\}\
+\outl0\strokewidth0 \
+//from motion detector\
+\outl0\strokewidth0 void ledColorSet(uchar r_val, uchar g_val, uchar b_val)\{\
+    softPwmWrite(redPin,   r_val);\
+    softPwmWrite(greenPin, g_val);\
+    softPwmWrite(bluePin,  b_val);\
+\}\
+\outl0\strokewidth0 \
+\
+\pard\pardeftab720\partightenfactor0
+\cf2 \
+int main(int argc, char **argv)\
+\{\
+\
+#from motion sensor\
+\pard\pardeftab720\partightenfactor0
+\cf2 \outl0\strokewidth0  	int pir_val;\
+    if(wiringPiSetup() == -1)\{ //when initialize wiring failed,print message to screen\
+        printf("setup wiringPi failed !");\
+        return 1;\
+    \}\
+    ledInit();\
+    pinMode(pirPin, INPUT);\
+\
+\
+\outl0\strokewidth0 \
+\pard\pardeftab720\partightenfactor0
+\cf2     uint8_t data[16]=\{0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x20,0x21,0x22,0x23,255,255,255,255\};\
+	uint8_t status=1;\
+    InitRc522();		 //RC522\
+	memset(data,0,16);\
+	printf("Reading...Please place the card...\\r\\n");\
+	// scanf("%s", data);\
+    \
+\
+#set initial color no motion\
+\pard\pardeftab720\partightenfactor0
+\cf2 \outl0\strokewidth0 ledColorSet(0x00,0x00,0xff);\outl0\strokewidth0 \
+\pard\pardeftab720\partightenfactor0
+\cf2 \
+while (1)\
+    \{\
+	//from motion sensor\
+	\outl0\strokewidth0 pir_val = digitalRead(pirPin);\outl0\strokewidth0 \
+     \
+	status=read_card_data(data);\
+	\
+	//from motion sensor\
+	\outl0\strokewidth0 if(pir_val== 1)\{ //if read pir is HIGH level\
+\pard\pardeftab720\partightenfactor0
+\cf2             ledColorSet(0xff,0xff,0x00); \
+        \}\outl0\strokewidth0 		\
+\pard\pardeftab720\partightenfactor0
+\cf2 \
+\
+\
+		if(status==MI_OK)\
+		\{\
+			\outl0\strokewidth0 ledColorSet(0x00,0x00,0xff);\outl0\strokewidth0 \
+			break;\
+		\}\
+    \}\
+    \
+\}\
+\
+void print_info(unsigned char *p,int cnt)\
+\{\
+  int i;\
+	for(i=0;i<cnt;i++)\
+	\{\
+		printf("%c",p[i]);\
+	\}\
+	printf("\\r\\n");\
+\}\
+\
+ \
+int read_card() //read the card\
+\{\
+	unsigned char CT[2];//card type\
+	uint8_t status=1;\
+	status=PcdRequest(PICC_REQIDL ,CT);//
+\f1 \'a3\'a8
+\f0 card search mode, card type
+\f1 \'a3\'a9
+\f0 \
+	\
+	if(status==MI_OK)//searching card successes\
+	\{\
+	  status=MI_ERR;\
+	  status=PcdAnticoll(SN);  //Anti-collision, return 0 successfully; SN is the address of the read card.\
+		\
+\
+		printf("Card type: ");\
+		if(CT[0] == 0x44)\
+		\{\
+			printf("Mifare_UltraLight \\r\\n");\
+		\}\
+		else if(CT[0]==0x4)\
+		\{\
+			printf("MFOne_S50 \\r\\n");\
+		\}\
+		else if(CT[0]==0X2)\
+		\{\
+			printf("MFOne_S70 \\r\\n");\
+		\}\
+		else if (CT[0]==0X8)\
+		\{\
+			printf("Mifare_Pro(X)\\r\\n");\
+		\}\
+		\
+		printf("Card ID: 0x");\
+	  	printf("%X%X%X%X\\r\\n",SN[0],SN[1],SN[2],SN[3]);\
+	\}\
+	if(status==MI_OK)\
+	\{\
+		status=MI_ERR;	\
+		status =PcdSelect(SN);	//Select the card.\
+	\}\
+	  return status;\
+\}\
+/*\
+Function: reset the password of the card.\
+Parameter Comment: auth_mode: Verify the type of code.\
+		addr
+\f1 \'a3\'ba
+\f0 the address where the codes are stored
+\f1 \'a3\'a8
+\f0 the password is saved at the third block of every section, and the first section is special.
+\f1 \'a3\'a9
+\f0 \
+		Src_Key 
+\f1 \'a3\'ba
+\f0 old password\
+		New_Key
+\f1 \'a3\'ba
+\f0 new password\
+		pSnr : card number\
+*/\
+int card_passworld(uint8_t auth_mode,uint8_t addr,uint8_t *Src_Key,uint8_t *New_Key,uint8_t *pSnr)\
+\{\
+		int status;\
+	 /*1.search card*/\
+    status=read_card(); \
+	 /*2. verify the passwoord of the card*/\
+		if(status==MI_OK)\
+		\{\
+			status=PcdAuthState(auth_mode,addr,Src_Key,pSnr);   \
+	  \}\
+	 /*3. write data in the card*/\
+		if(status==MI_OK)\
+		\{\
+		   status=PcdWrite(addr,New_Key); \
+		\}\
+		return status;\
+\}\
+/*\
+Function: Write the data to the specific block\
+Parameter Comment: addr
+\f1 \'a3\'ba
+\f0 the address where the codes are stored; the block 0.1.2 of every section are used to store the codes and 3 is used to store the password.\
+*/\
+uint8_t write_card_data(uint8_t *data)\
+\{\
+	uint8_t KEY[6]=\{0xff,0xff,0xff,0xff,0xff,0xff\}; //Initial password--the factory password of the white card.\
+	\
+	int status=MI_ERR;\
+    status=read_card(); \
+	   \
+	\
+		if(status==MI_OK)\
+		\{\
+			 status=PcdAuthState(PICC_AUTHENT1A,3,KEY,SN);  \
+			\
+		\}\
+		\
+	 \
+		if(status==MI_OK)\
+		\{\
+		   status=PcdWrite(2,data); \
+		\}\
+		if(status==MI_OK)\
+		\{\
+			printf("Write Data: ");\
+			print_info(data,16);\
+		\}\
+		return status;\
+\}\
+/*\
+Function: Read data to the designated block.\
+*/\
+uint8_t read_card_data()\
+\{\
+	uint8_t KEY[6]=\{0xff,0xff,0xff,0xff,0xff,0xff\}; \
+	int status;\
+	uint8_t data[16];\
+	\
+    status=read_card(); \
+	\
+		if(status==MI_OK)\
+		\{\
+			status=PcdAuthState(PICC_AUTHENT1A,3,KEY,SN);  \
+		\}\
+	 \
+		if(status==MI_OK)\
+		\{\
+		   status=PcdRead(2,data); \
+		\}\
+		if(status==MI_OK)\
+		\{\
+				printf("Data: ");\
+				print_info(data,16);\
+		\}\
+		return status;\
+\}\
+\
+}
